@@ -1,19 +1,18 @@
 package com.example.semana2_trabajo.network
 
-import com.example.semana2_trabajo.modelo.Producto
-import retrofit2.Call
+import com.example.semana2_trabajo.modelo.Equipo
 import retrofit2.http.*
 
 interface ApiService {
-    @GET("productos")
-    fun obtenerProductos(): Call<List<Producto>> // Usamos Call para que sea 100% compatible con Java y Kotlin
+    @GET("equipos")
+    suspend fun obtenerEquipos(): List<Equipo>
 
-    @POST("productos")
-    fun crearProducto(@Body producto: Producto): Call<Producto>
+    @POST("equipos")
+    suspend fun crearEquipo(@Body equipo: Equipo): Equipo
 
-    @PUT("productos/{id}")
-    fun actualizarProducto(@Path("id") id: Int, @Body producto: Producto): Call<Producto>
+    @PUT("equipos/{id}")
+    suspend fun actualizarEquipo(@Path("id") id: String, @Body equipo: Equipo): Equipo
 
-    @DELETE("productos/{id}")
-    fun eliminarProducto(@Path("id") id: Int): Call<Void>
+    @DELETE("equipos/{id}")
+    suspend fun eliminarEquipo(@Path("id") id: String)
 }

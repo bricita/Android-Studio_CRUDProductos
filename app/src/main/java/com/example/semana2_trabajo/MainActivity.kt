@@ -1,113 +1,190 @@
 package com.example.semana2_trabajo
 
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import com.example.semana2_trabajo.modelo.Producto
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.example.semana2_trabajo.modelo.Equipo
 import com.example.semana2_trabajo.network.RetrofitClient
+import com.example.semana2_trabajo.ui.theme.Semana2_TrabajoTheme
+import kotlinx.coroutines.launch
 
-class MainActivity : AppCompatActivity() {
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            Semana2_TrabajoTheme {
+                EquipoCrudApp()
+            }
+        }
+    }
+}
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EquipoCrudApp() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    
+    var equipos by remember { mutableStateOf(emptyList<Equipo>()) }
+    var isLoading by remember { mutableStateOf(false) }
+    
+    // Estados del formulario
+    var nombre by remember { mutableStateOf("") }
+    var pais by remember { mutableStateOf("") }
+    var editingId by remember { mutableStateOf<String?>(null) }
 
-        // Ejemplos de uso de las operaciones CRUD:
-
-        // 1. LEER (Read)
-        cargarProductos()
-
-        // 2. CREAR (Create)
-        val nuevo = Producto(1,"Teclado Mecánico", 45.99)
-        crearProducto(nuevo)
+    fun refreshList() {
+        scope.launch {
+            isLoading = true
+            try {
+                equipos = RetrofitClient.instance.obtenerEquipos()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error al cargar: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isLoading = false
+            }
+        }
     }
 
-    private fun cargarProductos() {
-        // 1. Creamos la petición de red (el objeto Call)
-        val call = RetrofitClient.instance.obtenerProductos()
+    LaunchedEffect(Unit) {
+        refreshList()
+    }
 
-        // 2. Lo ejecutamos de forma asíncrona en segundo plano automáticamente (.enqueue)
-        call.enqueue(object : retrofit2.Callback<List<Producto>> {
-
-            // Esta función se ejecuta si el servidor responde (exitoso o con error de servidor)
-            override fun onResponse(
-                call: retrofit2.Call<List<Producto>>,
-                response: retrofit2.Response<List<Producto>>
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("CRUD Equipos de Fútbol") }) }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            // Formulario
+            OutlinedTextField(
+                value = nombre,
+                onValueChange = { nombre = it },
+                label = { Text("Nombre del Equipo") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = pais,
+                onValueChange = { pais = it },
+                label = { Text("País") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            Button(
+                onClick = {
+                    if (nombre.isNotBlank() && pais.isNotBlank()) {
+                        scope.launch {
+                            try {
+                                val equipo = Equipo(nombre = nombre, pais = pais)
+                                if (editingId == null) {
+                                    RetrofitClient.instance.crearEquipo(equipo)
+                                    Toast.makeText(context, "Equipo creado", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    RetrofitClient.instance.actualizarEquipo(editingId!!, equipo)
+                                    Toast.makeText(context, "Equipo actualizado", Toast.LENGTH_SHORT).show()
+                                }
+                                nombre = ""; pais = ""; editingId = null
+                                refreshList()
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.padding(top = 16.dp).align(Alignment.End)
             ) {
-                if (response.isSuccessful) {
-                    val lista = response.body()
-                    // Aquí ya estás en el hilo principal de la UI de forma segura
-                    Log.d("CRUD", "Productos: $lista")
-                } else {
-                    Toast.makeText(this@MainActivity, "Error al cargar", Toast.LENGTH_SHORT).show()
+                Text(if (editingId == null) "Registrar Equipo" else "Guardar Cambios")
+            }
+
+            if (editingId != null) {
+                TextButton(
+                    onClick = { nombre = ""; pais = ""; editingId = null },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Cancelar Edición", color = Color.Red)
                 }
             }
 
-            // Esta función se ejecuta si no hay internet o el servidor está apagado
-            override fun onFailure(call: retrofit2.Call<List<Producto>>, t: Throwable) {
-                Log.e("CRUD_ERROR", t.message ?: "Error de conexión")
-                Toast.makeText(this@MainActivity, "Error de conexión", Toast.LENGTH_SHORT).show()
-            }
-        })
-    }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-
-    private fun crearProducto(producto: Producto) {
-        RetrofitClient.instance.crearProducto(producto).enqueue(object : retrofit2.Callback<Producto> {
-            override fun onResponse(call: retrofit2.Call<Producto>, response: retrofit2.Response<Producto>) {
-                if (response.isSuccessful) {
-                    Toast.makeText(this@MainActivity, "¡Creado con éxito!", Toast.LENGTH_SHORT).show()
-                    cargarProductos() // Recargar lista automáticamente
-                } else {
-                    Toast.makeText(this@MainActivity, "Error al crear producto", Toast.LENGTH_SHORT).show()
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(equipos) { equipo ->
+                        EquipoItem(
+                            equipo = equipo,
+                            onEdit = {
+                                nombre = equipo.nombre
+                                pais = equipo.pais
+                                editingId = equipo.id
+                            },
+                            onDelete = {
+                                scope.launch {
+                                    try {
+                                        equipo.id?.let { RetrofitClient.instance.eliminarEquipo(it) }
+                                        Toast.makeText(context, "Eliminado", Toast.LENGTH_SHORT).show()
+                                        refreshList()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        )
+                    }
                 }
             }
-
-            override fun onFailure(call: retrofit2.Call<Producto>, t: Throwable) {
-                Toast.makeText(this@MainActivity, "Error de red al crear", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }
     }
+}
 
-
-    private fun editarProducto(id: Int, productoActualizado: Producto) {
-        RetrofitClient.instance.actualizarProducto(id, productoActualizado).enqueue(object : retrofit2.Callback<Producto> {
-            override fun onResponse(call: retrofit2.Call<Producto>, response: retrofit2.Response<Producto>) {
-                if (response.isSuccessful) {
-                    Toast.makeText(this@MainActivity, "Actualizado con éxito", Toast.LENGTH_SHORT).show()
-                    cargarProductos()
-                } else {
-                    Toast.makeText(this@MainActivity, "Error al actualizar", Toast.LENGTH_SHORT).show()
+@Composable
+fun EquipoItem(equipo: Equipo, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = equipo.nombre, style = MaterialTheme.typography.titleLarge)
+                Text(text = equipo.pais, style = MaterialTheme.typography.bodyMedium)
+            }
+            Row {
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = "Editar", tint = Color.Blue)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color.Red)
                 }
             }
-
-            override fun onFailure(call: retrofit2.Call<Producto>, t: Throwable) {
-                Toast.makeText(this@MainActivity, "Error de red al actualizar", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }
     }
-
-
-    private fun eliminarProducto(id: Int) {
-        RetrofitClient.instance.eliminarProducto(id).enqueue(object : retrofit2.Callback<Void> {
-            override fun onResponse(call: retrofit2.Call<Void>, response: retrofit2.Response<Void>) {
-                if (response.isSuccessful) {
-                    Toast.makeText(this@MainActivity, "Eliminado con éxito", Toast.LENGTH_SHORT).show()
-                    cargarProductos()
-                } else {
-                    Toast.makeText(this@MainActivity, "Error al eliminar", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            override fun onFailure(call: retrofit2.Call<Void>, t: Throwable) {
-                Toast.makeText(this@MainActivity, "Error de red al eliminar", Toast.LENGTH_SHORT).show()
-            }
-        })
-    }
-
 }

@@ -4,8 +4,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
-    // Si pruebas con el emulador de Android Studio, 10.0.2.2 apunta al localhost de tu PC
-    private const val BASE_URL = "http://localhost:3000"
+    // REEMPLAZAR con tu URL de MockAPI (ejemplo: https://66d5...mockapi.io/)
+    private const val BASE_URL = "https://your-mockapi-url.com/" 
 
     val instance: ApiService by lazy {
         Retrofit.Builder()
